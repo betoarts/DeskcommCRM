@@ -112,6 +112,9 @@ set_env_var "$supabase_env" SUPABASE_PUBLIC_URL "https://${domain}"
 set_env_var "$supabase_env" API_EXTERNAL_URL "https://${domain}/auth/v1"
 set_env_var "$supabase_env" SITE_URL "https://${domain}"
 set_env_var "$supabase_env" ADDITIONAL_REDIRECT_URLS "https://${domain}/auth/confirm,https://${domain}/**"
+# O cadastro público vira uma registration_request e a aplicação cuida dos avisos
+# pelo SMTP próprio. Não dependa do mailer do GoTrue para criar essa solicitação.
+set_env_var "$supabase_env" ENABLE_EMAIL_AUTOCONFIRM true
 set_env_var "$supabase_env" PROXY_DOMAIN "$domain"
 set_env_var "$supabase_env" CERTBOT_EMAIL "admin@${domain}"
 set_env_var "$supabase_env" SINGLE_SERVER_NETWORK "$SINGLE_SERVER_NETWORK"
