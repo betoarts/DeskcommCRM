@@ -1471,7 +1471,7 @@ chegou_na_deteccao() {
 #   printf '%s' "${RESTO_DAS_PERGUNTAS%%c*}" | grep -c ''
 # → a quantidade depende do questionário atual do instalador. O último `c`
 #   confirma o aviso de DNS.
-RESTO_DAS_PERGUNTAS="$(for _ in {1..17}; do printf '\n'; done; printf 'c\n')"
+RESTO_DAS_PERGUNTAS="$(for _ in {1..19}; do printf '\n'; done; printf 'c\n')"
 
 # A posição da cor DENTRO da fila acima — SUPABASE_ACCESS_TOKEN + 1 provedor +
 # APP_IMAGE + OPENAI + APP_NAME + APP_LOCALE e ela é a 7ª. Fica numa variável porque a fila com a cor RESPONDIDA
@@ -1962,6 +1962,8 @@ STUB
   fi
   if ! grep -qx 'TRAEFIK_NETWORK="crmhost_teste_proxy"' "$PROJ/.env"; then
     printf '  ✗ TRAEFIK_NETWORK errado no .env: %s\n' "$(grep -E '^TRAEFIK_NETWORK=' "$PROJ/.env" || echo '(ausente)')"
+    printf '     últimas linhas do instalador:\n'
+    printf '%s\n' "$saida" | tail -20 | sed 's/^/       /'
     exit 1
   fi
   printf '  ✓ confirmando "s": cria a bridge e grava a rede com o nome que o compose usa\n'

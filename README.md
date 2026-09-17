@@ -132,11 +132,16 @@ Já dentro da VPS:
 ```bash
 git clone https://github.com/melgarafael/DeskcommCRM.git
 cd DeskcommCRM
-bash hostgator-setup-kit/install.sh
+bash ubuntu-production-installer.sh
 ```
 
 É isso. **Você não instala Node, nem pnpm, nem compila nada** — a imagem do app já vem pronta.
-Se faltar Docker, o instalador pergunta e instala sozinho.
+O instalador prepara o Ubuntu, pergunta o domínio e as credenciais necessárias, gera o `.env`
+e os segredos, configura a comunicação interna dos containers e escolhe HTTPS via Caddy ou
+o Traefik que já existir na hospedagem. Se faltar Docker, ele pergunta e instala sozinho.
+
+Em outra distribuição Linux, ou se você já preparou o servidor manualmente, a entrada canônica
+continua disponível em `bash hostgator-setup-kit/install.sh`.
 
 ### O que você precisa ter em mãos
 
