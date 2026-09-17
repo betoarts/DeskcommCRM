@@ -18,6 +18,8 @@
 
 </div>
 
+![Visão do DeskcommCRM: atendimento por WhatsApp, pipeline de vendas, automações, agentes de IA, agenda e métricas.](./public/readme/deskcommcrm-cover.png)
+
 ---
 
 > ### ☁️ Rode este CRM em produção com 1 comando
