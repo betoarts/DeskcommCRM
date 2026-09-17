@@ -130,7 +130,7 @@ travamento: é o terminal escondendo a senha. Digite (ou cole) e dê Enter.
 Já dentro da VPS:
 
 ```bash
-git clone https://github.com/melgarafael/DeskcommCRM.git
+git clone https://github.com/betoarts/DeskcommCRM.git
 cd DeskcommCRM
 bash ubuntu-production-installer.sh
 ```
