@@ -336,7 +336,7 @@ Detalhes: [`ARCHITECTURE.md`](ARCHITECTURE.md).
 > Esta seção é pra quem vai mexer no código.
 
 ```bash
-git clone https://github.com/melgarafael/DeskcommCRM.git
+git clone https://github.com/betoarts/DeskcommCRM.git
 cd DeskcommCRM
 
 nvm use                     # Node 22
