@@ -52,24 +52,25 @@ export default async function PublicLayout({ children }: { children: React.React
                 <img> em vez de next/image pelo mesmo motivo da barra lateral: a URL
                 é de quem hospeda e o `next/image` exige allowlist de domínios
                 fechada em BUILD — a imagem pré-buildada do self-host recusaria o
-                domínio do operador. Altura fixa e largura livre para não distorcer
-                arte de proporção desconhecida.
+                domínio do operador. Medida fixa aprovada pela interface
+                (226×62px), com object-contain para não distorcer arte de
+                proporção desconhecida.
 
                 O `alt` é o nome DESTA resolução (`marca.nome`), e não o de
                 `branding()`: é a legenda da imagem que está ali, e nomeá-la com a
                 marca de outra fonte descreveria uma marca que não é a do logo.
 
                 O `data-testid` é lido por `tests/e2e/marca-logo.spec.ts`, que prova
-                que o logo da EMPRESA não vaza para cá. Sem ele a spec caía na
-                "primeira <img> da página", e uma asserção de negação com seletor
-                largo passa sozinha assim que outra imagem entra na tela.
+                que o logo sincronizado da instalação aparece na fachada. Sem ele
+                a spec cairia na "primeira <img> da página" e poderia medir outra
+                imagem assim que uma nova imagem entrasse na tela.
               */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 data-testid="logo-da-fachada"
                 src={marca.logoUrl}
                 alt={marca.nome}
-                className="h-10 w-auto max-w-[12rem] object-contain"
+                className="h-[62px] w-[226px] object-contain"
               />
             </div>
           )}

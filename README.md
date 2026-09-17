@@ -79,6 +79,28 @@ próxima seção para o ambiente local: `hostgator-setup-kit/install.sh` é dest
 
 Guia detalhado: [`docs/SETUP.md`](docs/SETUP.md#instalação-local-em-ubuntuvm-postgresql--serviços-em-docker).
 
+### 🧨 Zerar todos os recursos Docker
+
+Se a intenção for descartar **tudo** que existe no daemon Docker atualmente selecionado
+(não apenas os serviços deste projeto), use o script abaixo na raiz do repositório:
+
+```bash
+bash unistall_docker.sh
+```
+
+Ele pede que você digite `ZERAR-DOCKER` antes de continuar e remove todos os containers,
+imagens, volumes — inclusive bancos de dados —, redes personalizadas e cache de build.
+É uma operação irreversível: faça backup antes se houver qualquer dado a preservar.
+
+Para execução não interativa, por exemplo em uma rotina de descarte de ambiente:
+
+```bash
+bash unistall_docker.sh --force
+```
+
+O script não desinstala o Docker, não remove as redes internas padrão (`bridge`, `host` e
+`none`) e não altera configurações do daemon ou credenciais locais.
+
 ---
 
 ## ⚡ Instalar na sua VPS (o caminho principal)

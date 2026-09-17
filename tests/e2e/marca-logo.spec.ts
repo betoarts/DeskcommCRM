@@ -16,10 +16,9 @@
  *   1. **A camada da instalação pinta a fachada.** O logo do dono do servidor
  *      aparece na barra lateral E no `/login` de quem não entrou — a P0 de
  *      primeira impressão.
- *   2. **A camada da organização NÃO vaza para a fachada.** O logo do cliente
- *      final troca a barra lateral dele e o `/login` continua sendo o do
- *      revendedor. É a propriedade que separa "marca própria" de "qualquer um
- *      repinta a instalação".
+ *   2. **O logo da organização também chega à fachada.** Ao subir o logo em
+ *      Configurações → Marca, a aplicação sincroniza o arquivo com a instalação
+ *      para que o `/login` use a mesma identidade visual antes da autenticação.
  *   3. **O que não é imagem não entra.** Um SVG renomeado para `.png` é recusado
  *      pelos BYTES, com a razão dita em português, e nada muda na tela.
  *
@@ -548,7 +547,7 @@ test.describe("o logo subido pela tela chega à tela", () => {
     await contexto.close();
   });
 
-  test("(3) o logo da EMPRESA troca a barra dela e NÃO vaza para a tela de acesso", async ({
+  test("(3) o logo da EMPRESA troca a barra dela e chega à tela de acesso", async ({
     page,
     browser,
   }) => {
@@ -572,13 +571,12 @@ test.describe("o logo subido pela tela chega à tela", () => {
     baixou(barra!, "barra lateral da empresa");
     await page.screenshot({ path: evidencia("4-sidebar-da-empresa.png") });
 
-    // A camada de cima NÃO alcança a fachada: quem não entrou continua vendo o
-    // logo do revendedor. Sem esta asserção, o caso (1) e o (3) seriam
-    // indistinguíveis de "o último upload repinta tudo".
+    // O login não tem organização ativa. O upload da empresa sincroniza o
+    // ponteiro da instalação para que a mesma imagem apareça antes do login.
     const noLogin = await logoDoLogin(browser);
     expect(noLogin, "a tela de acesso ficou sem logo depois do upload da empresa").not.toBeNull();
-    expect(noLogin!.src).toContain(`${PREFIXO_PUBLICO}platform/`);
-    expect(noLogin!.src).not.toContain(`${PREFIXO_PUBLICO}${creds.org_id}/`);
+    expect(noLogin!.src).toContain(`${PREFIXO_PUBLICO}${creds.org_id}/`);
+    baixou(noLogin!, "tela de acesso com logo da empresa");
   });
 
   test("(4) SVG renomeado para .png é recusado pelos BYTES, com a razão dita", async ({ page }) => {

@@ -20,6 +20,21 @@ env_value() {
   awk -F= -v key="$key" '$1 == key { sub(/^[^=]*=/, ""); print; exit }' "$ENV_FILE"
 }
 
+ensure_vapid_keys() {
+  local public_key private_key keys_json
+  public_key="$(env_value VAPID_PUBLIC_KEY)"
+  private_key="$(env_value VAPID_PRIVATE_KEY)"
+  if [[ -n "$public_key" && -n "$private_key" ]]; then
+    return
+  fi
+  keys_json="$(node -e 'const webpush = require("web-push"); process.stdout.write(JSON.stringify(webpush.generateVAPIDKeys()))')"
+  public_key="$(printf '%s' "$keys_json" | node -e 'let s=""; process.stdin.on("data", c => s += c).on("end", () => process.stdout.write(JSON.parse(s).publicKey))')"
+  private_key="$(printf '%s' "$keys_json" | node -e 'let s=""; process.stdin.on("data", c => s += c).on("end", () => process.stdout.write(JSON.parse(s).privateKey))')"
+  printf '\n# Geradas automaticamente por local-env.sh; mantenha estas chaves para preservar as inscrições.\nVAPID_PUBLIC_KEY=%s\nVAPID_PRIVATE_KEY=%s\n' "$public_key" "$private_key" >> "$ENV_FILE"
+  chmod 600 "$ENV_FILE"
+  printf 'Chaves VAPID geradas automaticamente em %s\n' "$ENV_FILE"
+}
+
 has_local_env() {
   [[ "$(env_value DESKCOMM_ENV_MODE)" == "local" ]] || return 1
   local key
@@ -94,6 +109,7 @@ INTERNAL_CRON_SECRET=$(openssl rand -hex 32)
 CPF_ENCRYPTION_KEY=$(openssl rand -base64 32)
 WAHA_BYO_ENCRYPTION_KEY=$(openssl rand -base64 32)
 AI_CRED_AES_KEY=$(openssl rand -base64 32)
+NUVEMSHOP_OAUTH_ENCRYPTION_KEY=$(openssl rand -hex 32)
 
 WAHA_API_BASE_URL=http://waha:3000
 WAHA_API_KEY=deskcomm-local-key
@@ -118,6 +134,7 @@ EOF
 case "${1:-ensure}" in
   ensure)
     if ! has_local_env; then generate; fi
+    ensure_vapid_keys
     ;;
   generate|force)
     generate

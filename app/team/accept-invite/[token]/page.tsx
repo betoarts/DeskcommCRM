@@ -14,6 +14,7 @@ import { verifyInviteToken } from "@/lib/auth/invite-token";
 import { authRateLimited, AUTH_LIMITS } from "@/lib/auth/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 import { AcceptInviteForm } from "./AcceptInviteForm";
+import { AutoAcceptInvite } from "./AutoAcceptInvite";
 import { normalizarIdioma } from "@/lib/i18n/idiomas";
 import { traduzir } from "@/lib/i18n/dicionario";
 
@@ -21,10 +22,12 @@ export const dynamic = "force-dynamic";
 
 interface PageProps {
   params: Promise<{ token: string }>;
+  searchParams?: Promise<{ auto?: string }>;
 }
 
-export default async function AcceptInvitePage({ params }: PageProps) {
+export default async function AcceptInvitePage({ params, searchParams }: PageProps) {
   const { token } = await params;
+  const autoAceitar = (await searchParams)?.auto === "1";
 
   // Rota pública, fora da árvore de `app/app/layout.tsx` — sem `IdiomaProvider`,
   // então resolve o idioma direto, como `admin/forbidden/page.tsx`. Buscado
@@ -130,10 +133,20 @@ export default async function AcceptInvitePage({ params }: PageProps) {
     <Shell>
       <h1 className="text-xl font-semibold">{t("Aceitar convite")}</h1>
       <p className="mt-2 text-sm text-muted-foreground">
-        {t("Você foi convidado para entrar como")} <strong>{payload.role}</strong>.{" "}
-        {t("Confirme abaixo para ativar seu acesso.")}
+        {autoAceitar
+          ? t("Seu acesso está sendo ativado automaticamente.")
+          : <>{t("Você foi convidado para entrar como")} <strong>{payload.role}</strong>.{" "}{t("Confirme abaixo para ativar seu acesso.")}</>}
       </p>
-      <AcceptInviteForm token={token} label={t("Aceitar convite")} pendingLabel={t("Confirmando…")} failureLabel={t("Não foi possível aceitar este convite. Ele pode ter vencido ou seu acesso foi revogado. Peça um novo link ao administrador.")} />
+      {autoAceitar ? (
+        <AutoAcceptInvite
+          token={token}
+          pendingLabel={t("Ativando acesso…")}
+          retryLabel={t("Aceitar convite")}
+          failureLabel={t("Não foi possível aceitar este convite. Ele pode ter vencido ou seu acesso foi revogado. Peça um novo link ao administrador.")}
+        />
+      ) : (
+        <AcceptInviteForm token={token} label={t("Aceitar convite")} pendingLabel={t("Confirmando…")} failureLabel={t("Não foi possível aceitar este convite. Ele pode ter vencido ou seu acesso foi revogado. Peça um novo link ao administrador.")} />
+      )}
     </Shell>
   );
 }

@@ -46,7 +46,6 @@ export async function GET(_req: NextRequest): Promise<Response> {
     .from("user_organizations")
     .select("user_id, role, interface_settings, invited_at, accepted_at, revoked_at, created_at")
     .eq("organization_id", activeOrg.orgId)
-    .is("revoked_at", null)
     .order("created_at", { ascending: true });
 
   if (error) return fail("internal_error", error.message, 500, { requestId });

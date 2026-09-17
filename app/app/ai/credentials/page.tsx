@@ -34,6 +34,7 @@ export default async function CredentialsPage() {
 
   // Mesma regra do DELETE: só conta a versão PUBLICADA de agente não arquivado.
   let usageMap: Record<string, number> = {};
+  const referenceMap: Record<string, number> = {};
   if (credentials.length > 0) {
     const { data: linked } = await supabase
       .from("ai_agent_versions")
@@ -43,6 +44,10 @@ export default async function CredentialsPage() {
       .eq("organization_id", activeOrg.orgId)
       .in("credential_id", credentials.map((c) => c.id));
     usageMap = contarUsoPublicado((linked ?? []) as unknown as VersaoVinculada[]);
+    for (const version of linked ?? []) {
+      if (!version.credential_id) continue;
+      referenceMap[version.credential_id] = (referenceMap[version.credential_id] ?? 0) + 1;
+    }
   }
 
   return (
@@ -60,6 +65,7 @@ export default async function CredentialsPage() {
         initialData={credentials}
         canWrite={canWrite}
         usageMap={usageMap}
+        referenceMap={referenceMap}
       />
     </div>
   );

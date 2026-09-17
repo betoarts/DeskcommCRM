@@ -42,6 +42,7 @@ interface Props {
   credential: CredentialRow;
   canWrite: boolean;
   usageCount: number;
+  referenceCount: number;
 }
 
 const STATUS_LABEL: Record<CredentialStatus, string> = {
@@ -60,7 +61,7 @@ const STATUS_VARIANT: Record<CredentialStatus, "default" | "secondary" | "destru
   inactive: "outline",
 };
 
-export function CredentialCard({ credential, canWrite, usageCount }: Props) {
+export function CredentialCard({ credential, canWrite, usageCount, referenceCount }: Props) {
   const t = useT();
   const router = useRouter();
   const qc = useQueryClient();
@@ -69,7 +70,7 @@ export function CredentialCard({ credential, canWrite, usageCount }: Props) {
 
   const status = credentialStatus(credential);
   const last4 = credential.api_key_last4 ?? "????";
-  const inUse = usageCount > 0;
+  const hasReferences = referenceCount > 0;
   const erro = descreverErroDeValidacao(credential.validation_error);
   const provedor = PROVEDORES.find((p) => p.id === credential.provider);
 
@@ -105,7 +106,7 @@ export function CredentialCard({ credential, canWrite, usageCount }: Props) {
       variant="ghost"
       size="icon"
       aria-label={t("Excluir credencial")}
-      disabled={!canWrite || inUse || isPending}
+      disabled={!canWrite || hasReferences || isPending}
       onClick={() => setDeleteOpen(true)}
     >
       <Trash size={14} aria-hidden />
@@ -179,16 +180,17 @@ export function CredentialCard({ credential, canWrite, usageCount }: Props) {
           >
             <ArrowsClockwise size={14} aria-hidden />
           </Button>
-          {inUse ? (
+          {hasReferences ? (
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span tabIndex={0}>{deleteButton}</span>
                 </TooltipTrigger>
                 <TooltipContent>
-                  {t("Em uso por")} {usageCount} {t("agente")}
-                  {usageCount === 1 ? "" : "s"} {t("publicado")}
-                  {usageCount === 1 ? "" : "s"}.
+                  {usageCount > 0
+                    ? `${t("Em uso por")} ${usageCount} ${t("agente")}${usageCount === 1 ? "" : "s"} ${t("publicado")}${usageCount === 1 ? "" : "s"}. `
+                    : ""}
+                  {t("Esta credencial ainda é referenciada por versões do agente. Remova essas versões antes de excluí-la.")}
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>

@@ -12,9 +12,10 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
  *  1. **escopo por `z.enum`** — allowlist, nunca string livre. Sem ela,
  *     `../platform` vira prefixo e o arquivo de um tenant aterrissa na pasta da
  *     instalação.
- *  2. **gate por escopo** — `platform_admin` para a instalação (é a marca do
- *     LOGIN, comum a todos os clientes do revendedor); `admin` do tenant + MFA
- *     em dia para a organização. Duplicado dos escritores que já existem
+ *  2. **gate por escopo** — `platform_admin` para a instalação; `admin` do tenant
+ *     + MFA em dia para a organização. O logo da organização também é
+ *     sincronizado com a fachada do login; nome e cor continuam escopados à
+ *     organização. Duplicado dos escritores que já existem
  *     (`updateBranding.ts`, `updateMarcaDaOrganizacao.ts`), de propósito.
  *  3. **rate limit** — depois do gate: quem nem passou no papel não gasta o
  *     orçamento de quem passou.
@@ -218,7 +219,11 @@ async function caminhoGravado(ctx: Contexto): Promise<string | null> {
  * outros fazem read-modify-write do jsonb inteiro. O `row_count` de volta é o que
  * distingue "gravou" de "não gravou".
  */
-async function gravarCaminho(ctx: Contexto, caminho: string | null): Promise<Recusa | null> {
+async function gravarCaminho(
+  ctx: Contexto,
+  caminho: string | null,
+  caminhoDaFachada: string | null = caminho,
+): Promise<Recusa | null> {
   const admin = createAdminClient();
   if (ctx.escopo === "instalacao") {
     const { error } = await admin
@@ -278,6 +283,24 @@ async function gravarCaminho(ctx: Contexto, caminho: string | null): Promise<Rec
   if (data !== 1) {
     return { codigo: "internal_error", mensagem: "O logo não foi gravado.", status: 500 };
   }
+  // O login acontece antes de existir uma organização ativa. Por isso, quando
+  // o admin define o logo nas Configurações da empresa, uma cópia no prefixo da
+  // instalação passa a ser usada pela fachada pública. O banco não permite que
+  // `platform_branding.logo_path` aponte para o prefixo de um tenant.
+  const { error: erroFachada } = await admin
+    .from("platform_branding")
+    .upsert(
+      { id: 1, logo_path: caminhoDaFachada, seeded_from_env: false },
+      { onConflict: "id" },
+    );
+  if (erroFachada) {
+    logger.error("[marca/logo] sincronização da fachada falhou", {
+      codigo: erroFachada.code,
+      detalhe: erroFachada.message,
+    });
+    return { codigo: "internal_error", mensagem: "Erro ao sincronizar o logo do login.", status: 500 };
+  }
+  invalidarMarcaDaInstalacao();
   return null;
 }
 
@@ -289,12 +312,16 @@ async function gravarCaminho(ctx: Contexto, caminho: string | null): Promise<Rec
  * silenciosa — um caminho fora do escopo é sinal de dado adulterado, não de
  * limpeza rotineira, e é o único lugar onde esse sinal aparece.
  */
-async function apagarAnterior(ctx: Contexto, anterior: string | null): Promise<void> {
+async function apagarAnterior(
+  ctx: Contexto,
+  anterior: string | null,
+  prefixo = ctx.prefixo,
+): Promise<void> {
   if (!anterior) return;
-  if (!podeApagar(anterior, ctx.prefixo)) {
+  if (!podeApagar(anterior, prefixo)) {
     logger.error("[marca/logo] recusei apagar arquivo fora do escopo de quem pediu", {
       escopo: ctx.escopo,
-      prefixo_esperado: ctx.prefixo,
+      prefixo_esperado: prefixo,
       // O caminho INTEIRO, e não só o prefixo: sem ele o registro guarda a
       // mensagem e descarta o dono do erro — completo por fora, indiagnosticável
       // por dentro. O caminho não é segredo (o bucket é público) e é a única
@@ -422,6 +449,14 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   const anterior = await caminhoGravado(ctx);
   const caminho = caminhoNovoDoLogo(ctx.prefixo, extensaoDe(tipo));
+  const anteriorDaFachada =
+    ctx.escopo === "organizacao"
+      ? await caminhoGravado({ escopo: "instalacao", userId: ctx.userId, prefixo: PREFIXO_DA_INSTALACAO })
+      : anterior;
+  const caminhoDaFachada =
+    ctx.escopo === "organizacao"
+      ? caminhoNovoDoLogo(PREFIXO_DA_INSTALACAO, extensaoDe(tipo))
+      : caminho;
 
   const { error: erroUp } = await createAdminClient()
     .storage.from(BUCKET_DE_LOGOS)
@@ -431,16 +466,36 @@ export async function POST(req: NextRequest): Promise<Response> {
     return fail("internal_error", "Erro ao subir o logo.", 500, { requestId });
   }
 
-  const recusa = await gravarCaminho(ctx, caminho);
+  if (caminhoDaFachada !== caminho) {
+    const { error: erroUpFachada } = await createAdminClient()
+      .storage.from(BUCKET_DE_LOGOS)
+      .upload(caminhoDaFachada, bytes, { contentType: tipo, upsert: false });
+    if (erroUpFachada) {
+      logger.error("[marca/logo] upload da fachada falhou", {
+        detalhe: erroUpFachada.message,
+        requestId,
+      });
+      void createAdminClient().storage.from(BUCKET_DE_LOGOS).remove([caminho]);
+      return fail("internal_error", "Erro ao subir o logo do login.", 500, { requestId });
+    }
+  }
+
+  const recusa = await gravarCaminho(ctx, caminho, caminhoDaFachada);
   if (recusa) {
     // A gravação falhou DEPOIS do upload: o arquivo novo é que vira órfão, não o
     // antigo. Tentar apagá-lo aqui seria o caminho certo e não é obrigatório —
     // por isso é `void`, sem `await` no caminho de erro.
     void createAdminClient().storage.from(BUCKET_DE_LOGOS).remove([caminho]);
+    if (caminhoDaFachada !== caminho) {
+      void createAdminClient().storage.from(BUCKET_DE_LOGOS).remove([caminhoDaFachada]);
+    }
     return fail(recusa.codigo, recusa.mensagem, recusa.status, { requestId });
   }
 
   await apagarAnterior(ctx, anterior);
+  if (caminhoDaFachada !== caminho) {
+    await apagarAnterior(ctx, anteriorDaFachada, PREFIXO_DA_INSTALACAO);
+  }
   await registrarAuditoria(ctx, req, requestId, "definido");
 
   return ok(
@@ -486,10 +541,17 @@ export async function DELETE(req: NextRequest): Promise<Response> {
   }
 
   const anterior = await caminhoGravado(ctx);
+  const anteriorDaFachada =
+    ctx.escopo === "organizacao"
+      ? await caminhoGravado({ escopo: "instalacao", userId: ctx.userId, prefixo: PREFIXO_DA_INSTALACAO })
+      : anterior;
   const recusa = await gravarCaminho(ctx, null);
   if (recusa) return fail(recusa.codigo, recusa.mensagem, recusa.status, { requestId });
 
   await apagarAnterior(ctx, anterior);
+  if (ctx.escopo === "organizacao") {
+    await apagarAnterior(ctx, anteriorDaFachada, PREFIXO_DA_INSTALACAO);
+  }
   await registrarAuditoria(ctx, req, requestId, "removido");
 
   return ok({ logo_path: null, logo_url: null }, { requestId });

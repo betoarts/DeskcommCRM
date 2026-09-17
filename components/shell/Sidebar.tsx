@@ -122,10 +122,10 @@ export function SidebarContent({
           // <img> em vez de next/image de propósito: a URL vem de quem hospeda
           // (banco ou .env), e next/image exige allowlist de domínios fechada em
           // build — a imagem pré-buildada rejeitaria o domínio do self-hoster.
-          // Altura fixa e largura livre porque a arte enviada tem proporção
-          // desconhecida; forçar as duas distorceria o logo de quem configurou.
+          // A área de marca usa a medida aprovada pela interface (150×52px),
+          // mantendo object-contain para não distorcer a arte enviada.
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={logo} alt={nome} className="h-7 w-auto max-w-[10rem] object-contain" />
+          <img src={logo} alt={nome} className="ml-5 h-[52px] w-[150px] object-contain" />
         ) : (
           <span className={cn("font-semibold tracking-tight", collapsed && "sr-only")}>{nome}</span>
         )}

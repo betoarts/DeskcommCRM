@@ -15,7 +15,7 @@
  *
  * ─── Por que não é e-mail ──────────────────────────────────────────────────
  *
- * Seria melhor: chega mesmo com o navegador fechado. Mas `RESEND_API_KEY` é
+ * Seria melhor: chega mesmo com o navegador fechado. Mas SMTP é
  * opcional e está VAZIA numa instalação real — e um aviso que depende de env
  * opcional é um aviso que não existe justamente em quem instalou sozinho e não
  * configurou nada. A faixa funciona em toda instalação, sem configurar nada.

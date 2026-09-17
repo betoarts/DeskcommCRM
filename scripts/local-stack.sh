@@ -24,11 +24,26 @@ ensure_supabase() {
   fi
 }
 
+ensure_encryption_key() {
+  local key db_url
+  key="$(awk -F= '$1 == "NUVEMSHOP_OAUTH_ENCRYPTION_KEY" { sub(/^[^=]*=/, ""); print; exit }' "$ENV_FILE")"
+  if [[ -z "$key" ]]; then
+    key="$(openssl rand -hex 32)"
+    printf '\nNUVEMSHOP_OAUTH_ENCRYPTION_KEY=%s\n' "$key" >> "$ENV_FILE"
+  fi
+  db_url="$(./scripts/local-supabase.sh status | node -e 'let s=""; process.stdin.on("data", c => s += c).on("end", () => process.stdout.write(JSON.parse(s).DB_URL || ""))')"
+  [[ -n "$db_url" ]] || { printf 'Erro: Supabase local não retornou DB_URL.\n' >&2; exit 1; }
+  docker run --rm --network host postgres:15-alpine psql "$db_url" -v ON_ERROR_STOP=1 -c \
+    "insert into private.app_secrets (name, value) values ('nuvemshop_oauth_key', '$key') on conflict (name) do update set value = excluded.value, updated_at = now();" \
+    >/dev/null
+}
+
 case "${1:-}" in
   up)
     ensure_supabase
     ./scripts/local-env.sh ensure
     require_env
+    ensure_encryption_key
     "${COMPOSE[@]}" up -d --build
     ;;
   down)

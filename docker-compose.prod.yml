@@ -220,7 +220,8 @@ services:
         condition: service_healthy
     environment:
       TZ: UTC
-      INTERNAL_SECRET: ${INTERNAL_SECRET}
+      # Deve ser o mesmo segredo que as rotas de cron priorizam no app.
+      INTERNAL_SECRET: ${INTERNAL_CRON_SECRET:-${INTERNAL_SECRET}}
     logging: *default-logging
     networks: [internal]
 

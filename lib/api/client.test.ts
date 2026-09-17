@@ -95,4 +95,16 @@ describe("apiClient", () => {
     const headers = fetchMock.mock.calls[0]![1].headers as Record<string, string>;
     expect(headers["Idempotency-Key"]).toBe("custom-key-123");
   });
+
+  it("t8: retry=false não repete uma operação longa que recebeu 503", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(503, { error: { code: "service_unavailable", message: "aguarde" } }),
+    );
+
+    await expect(apiClient.post("/x", {}, { retry: false })).rejects.toMatchObject({
+      status: 503,
+      code: "service_unavailable",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 });

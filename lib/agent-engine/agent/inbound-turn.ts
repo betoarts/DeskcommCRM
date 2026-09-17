@@ -3353,17 +3353,26 @@ async function executarTurnoDoAgente(
     let stageSuggestion: LeadStage | null = null;
     let stageHintBlock = '';
     if (deps.knobs.stageClassifier !== undefined) {
-      stageSuggestion = await classifyStage(
-        pool,
-        deps.llmCfg,
-        { tenantId, leadId: leadId || null, jobId: job?.id },
-        {
-          context: effectiveContext,
-          currentStage,
-          ...argsAux(deps.knobs.stageClassifier.model),
-        },
-        { registry: deps.registry, log: runLog },
-      );
+      try {
+        stageSuggestion = await classifyStage(
+          pool,
+          deps.llmCfg,
+          { tenantId, leadId: leadId || null, jobId: job?.id },
+          {
+            context: effectiveContext,
+            currentStage,
+            ...argsAux(deps.knobs.stageClassifier.model),
+          },
+          { registry: deps.registry, log: runLog },
+        );
+      } catch (err) {
+        // É uma sugestão para o conversador, não uma condição para atendê-lo.
+        // Orçamento é a exceção: precisa subir até a escolta que faz o handoff.
+        if (err instanceof LlmBudgetExceededError) throw err;
+        runLog.warn('stage-classifier falhou — turno segue sem sugestão de estágio', {
+          error: (err instanceof Error ? err.message : String(err)).slice(0, 200),
+        });
+      }
       if (stageSuggestion !== null) {
         stageHintBlock = renderStageHint(stageSuggestion, currentStage);
       }
@@ -3375,24 +3384,33 @@ async function executarTurnoDoAgente(
     // (a mensagem/reason nunca vão a log). A correlação com promessa fora de tabela escala no fim.
     let jailbreakLevel: JailbreakLevel = 'none';
     if (camadaLigada(camadas.jailbreak, deps.knobs.jailbreak !== undefined)) {
-      const verdict = await classifyJailbreak(
-        pool,
-        deps.llmCfg,
-        { tenantId, leadId: leadId || null, jobId: job?.id },
-        {
-          message: skillSignal,
-          // Knob ausente + organização ligando = roda com o modelo padrão dela,
-          // que é a convenção já usada pelo stageClassifier.
-          ...argsAux(deps.knobs.jailbreak?.model),
-        },
-        { registry: deps.registry, log: runLog },
-      );
-      jailbreakLevel = verdict.level;
-      if (verdict.flag) {
-        // trace do turno: só flag/level (não PII) — a mensagem e o reason nunca são logados.
-        runLog.warn('jailbreak: sinal detectado na mensagem do lead', {
-          jailbreak_flag: true,
-          jailbreak_level: verdict.level,
+      try {
+        const verdict = await classifyJailbreak(
+          pool,
+          deps.llmCfg,
+          { tenantId, leadId: leadId || null, jobId: job?.id },
+          {
+            message: skillSignal,
+            // Knob ausente + organização ligando = roda com o modelo padrão dela,
+            // que é a convenção já usada pelo stageClassifier.
+            ...argsAux(deps.knobs.jailbreak?.model),
+          },
+          { registry: deps.registry, log: runLog },
+        );
+        jailbreakLevel = verdict.level;
+        if (verdict.flag) {
+          // trace do turno: só flag/level (não PII) — a mensagem e o reason nunca são logados.
+          runLog.warn('jailbreak: sinal detectado na mensagem do lead', {
+            jailbreak_flag: true,
+            jailbreak_level: verdict.level,
+          });
+        }
+      } catch (err) {
+        // A camada é advisória: falha do fornecedor não pode deixar o lead sem
+        // resposta. Orçamento continua propagando para a escolta do turno.
+        if (err instanceof LlmBudgetExceededError) throw err;
+        runLog.warn('jailbreak: classificador falhou — turno segue sem sinal', {
+          error: (err instanceof Error ? err.message : String(err)).slice(0, 200),
         });
       }
     }

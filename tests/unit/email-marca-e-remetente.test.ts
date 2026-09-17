@@ -7,7 +7,7 @@
  * e-mails de LGPD de todo clone diziam ter sido processados pelo DeskcommCRM, e
  * ninguém foi avisado por gate nenhum.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { NEUTROS_DE_SAIDA, type MarcaDeSaida } from "@/lib/branding/saida";
 import { buildInviteEmail } from "@/lib/email/templates/invite";
@@ -123,112 +123,41 @@ describe("convite de time", () => {
 });
 
 describe("remetente", () => {
-  const ORIGINAIS = {
-    key: process.env.RESEND_API_KEY,
-    from: process.env.RESEND_FROM_EMAIL,
+  const config = {
+    host: "smtp.revenda.com.br",
+    port: 465,
+    security: "tls" as const,
+    username: "nao-responda@revenda.com.br",
+    password: "segredo",
+    fromEmail: "nao-responda@revenda.com.br",
+    fromName: "",
+    source: "environment" as const,
   };
 
-  beforeEach(() => {
-    vi.resetModules();
-  });
+  it("sem remetente não existe e-mail de saída — e NUNCA um domínio do produto", async () => {
+    const { formatFromAddress, isSmtpConfigured } = await import("@/lib/email/smtp");
 
-  afterEach(() => {
-    for (const [chave, valor] of [
-      ["RESEND_API_KEY", ORIGINAIS.key],
-      ["RESEND_FROM_EMAIL", ORIGINAIS.from],
-    ] as const) {
-      if (valor === undefined) delete process.env[chave];
-      else process.env[chave] = valor;
-    }
-    vi.resetModules();
-  });
-
-  it("sem RESEND_FROM_EMAIL não existe remetente — e NUNCA um domínio do produto", async () => {
-    process.env.RESEND_FROM_EMAIL = "";
-    const { fromAddress } = await import("@/lib/email/resend");
-
-    expect(fromAddress("Vendas Turbo")).toBeNull();
+    expect(isSmtpConfigured({ ...config, fromEmail: "" })).toBe(false);
+    expect(formatFromAddress({ ...config, fromEmail: "" }, "Vendas Turbo")).toBeNull();
   });
 
   it("o endereço é do operador e o NOME é da marca", async () => {
-    process.env.RESEND_FROM_EMAIL = "nao-responda@revenda.com.br";
-    const { fromAddress } = await import("@/lib/email/resend");
+    const { formatFromAddress } = await import("@/lib/email/smtp");
 
-    expect(fromAddress("Vendas Turbo")).toBe("Vendas Turbo <nao-responda@revenda.com.br>");
+    expect(formatFromAddress(config, "Vendas Turbo")).toBe(
+      "Vendas Turbo <nao-responda@revenda.com.br>",
+    );
     // Sem marca não se inventa uma: sai o endereço puro.
-    expect(fromAddress()).toBe("nao-responda@revenda.com.br");
+    expect(formatFromAddress(config)).toBe("nao-responda@revenda.com.br");
   });
 
   it("nome de marca não injeta cabeçalho SMTP", async () => {
-    process.env.RESEND_FROM_EMAIL = "nao-responda@revenda.com.br";
-    const { fromAddress } = await import("@/lib/email/resend");
-
-    const sujo = fromAddress('Acme" <evil@x.com>\r\nBcc: vitima@y.com');
+    const { formatFromAddress } = await import("@/lib/email/smtp");
+    const sujo = formatFromAddress(config, 'Acme" <evil@x.com>\r\nBcc: vitima@y.com');
     expect(sujo).not.toContain("\r");
     expect(sujo).not.toContain("\n");
     // `<`, `>`, `"` e as quebras somem; o resto do texto fica, colado — o que
     // importa é que não sobrou cabeçalho nenhum para o SMTP interpretar.
     expect(sujo).toBe("Acme evil@x.comBcc: vitima@y.com <nao-responda@revenda.com.br>");
-  });
-
-  it("chave configurada mas remetente vazio = NÃO CONFIGURADO, não envio quebrado", async () => {
-    // É a decisão que joga o fluxo no caminho bom que já existe: `pending_review`
-    // no worker de LGPD e o link de aceite na tela do convite. Antes, o domínio
-    // herdado fazia a Resend recusar e o operador caçava rede e contêiner.
-    process.env.RESEND_API_KEY = "re_chave_valida_de_teste";
-    process.env.RESEND_FROM_EMAIL = "";
-    const { sendEmail, isEmailConfigured } = await import("@/lib/email/resend");
-
-    expect(isEmailConfigured()).toBe(false);
-    const r = await sendEmail({ to: "a@b.com", subject: "s", html: "<p>x</p>" });
-    expect(r).toEqual({ ok: false, error: "not_configured" });
-  });
-
-  it("domínio não verificado tem NOME próprio, e não vira 'send_failed' genérico", async () => {
-    process.env.RESEND_API_KEY = "re_chave_valida_de_teste";
-    process.env.RESEND_FROM_EMAIL = "nao-responda@revenda.com.br";
-    vi.doMock("resend", () => ({
-      Resend: class {
-        emails = {
-          send: async () => ({
-            data: null,
-            error: {
-              name: "validation_error",
-              message:
-                "The revenda.com.br domain is not verified. Please add and verify your domain on https://resend.com/domains",
-            },
-          }),
-        };
-      },
-    }));
-    const { sendEmail } = await import("@/lib/email/resend");
-
-    const r = await sendEmail({ to: "a@b.com", subject: "s", html: "<p>x</p>" });
-    expect(r.error).toBe("dominio_nao_verificado");
-    // A mensagem crua continua disponível: falhar fechado na AÇÃO, aberto na
-    // INFORMAÇÃO.
-    expect(r.details).toContain("not verified");
-    vi.doUnmock("resend");
-  });
-
-  it("limite de envio continua distinguível do resto", async () => {
-    process.env.RESEND_API_KEY = "re_chave_valida_de_teste";
-    process.env.RESEND_FROM_EMAIL = "nao-responda@revenda.com.br";
-    vi.doMock("resend", () => ({
-      Resend: class {
-        emails = {
-          send: async () => ({
-            data: null,
-            error: { name: "rate_limit_exceeded", message: "Too many requests" },
-          }),
-        };
-      },
-    }));
-    const { sendEmail } = await import("@/lib/email/resend");
-
-    expect((await sendEmail({ to: "a@b.com", subject: "s", html: "x" })).error).toBe(
-      "rate_limited",
-    );
-    vi.doUnmock("resend");
   });
 });

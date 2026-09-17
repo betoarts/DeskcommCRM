@@ -11,7 +11,9 @@ export const dynamic = "force-dynamic";
  *
  * O backend sempre soube: `GET /api/v1/notifications/push` devolve
  * `enabled: false` sem o par VAPID, e o `PUT` recusa com 503 «Web Push não
- * configurado nesta instalação». Quem não perguntava era esta página.
+ * configurado nesta instalação». O bootstrap local gera esse par
+ * automaticamente; esta página continua explicando o comando para instalações
+ * que não usam o instalador.
  *
  * O efeito, num primeiro deploy — que é o estado em que NENHUMA instalação tem
  * as chaves —, era o pior tipo de silêncio:
@@ -78,9 +80,12 @@ export default async function NotificationsPage() {
                 marca escrita à mão. «o site» diz a mesma coisa e serve a quem
                 revende o sistema com a marca dele. */}
             {t(
-              "Ligar o Push abaixo já faz o aviso aparecer na bandeja do sistema enquanto você está com o site aberto numa aba. Para receber também com a aba fechada, quem administra o servidor precisa gerar um par de chaves uma única vez e reiniciar:",
+              "Ligar o Push abaixo já faz o aviso aparecer na bandeja do sistema enquanto você está com o site aberto numa aba. Para receber também com a aba fechada, execute o configurador da instalação uma única vez e reinicie os serviços:",
             )}
           </p>
+          <pre className="mt-2 overflow-x-auto rounded-md bg-muted p-2 text-xs">
+            <code>bash scripts/setup-web-push.sh --restart</code>
+          </pre>
           <pre className="mt-2 overflow-x-auto rounded-md bg-muted p-2 text-xs">
             <code>npx web-push generate-vapid-keys</code>
           </pre>

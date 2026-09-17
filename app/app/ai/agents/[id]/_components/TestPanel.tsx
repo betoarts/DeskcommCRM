@@ -174,6 +174,10 @@ export function TestPanel({ agent, draft, published, readOnly }: Props) {
       const res = await apiClient.post<TestResponse>(
         `/api/v1/ai/agents/${agent.id}/versions/${target.id}/test`,
         body,
+        // O ensaio executa o fluxo real do agente e pode envolver classificadores
+        // auxiliares antes da resposta final. O timeout padrão de 10 s abortava
+        // a tela, repetia o POST e criava vários dry-runs concorrentes.
+        { timeoutMs: 180_000, retry: false },
       );
       setResult(res.data);
       qc.invalidateQueries({ queryKey: agentRunsKey(agent.id) });

@@ -9,6 +9,7 @@ import { useT } from "@/hooks/i18n/useT";
 import { useTeamMembers, type TeamMember } from "@/hooks/team/useTeamMembers";
 import { useChangeRole } from "@/hooks/team/useChangeRole";
 import { useRevokeMember } from "@/hooks/team/useRevokeMember";
+import { useActivateMember } from "@/hooks/team/useActivateMember";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -54,6 +55,7 @@ export function TeamMembersClient({ currentUserId, canManage }: Props) {
   const { data, isLoading, isError } = useTeamMembers();
   const changeRole = useChangeRole();
   const revoke = useRevokeMember();
+  const activate = useActivateMember();
 
   const [interfaceMember, setInterfaceMember] = useState<TeamMember | null>(null);
   const [revokeDialog, setRevokeDialog] = useState<TeamMember | null>(null);
@@ -66,7 +68,7 @@ export function TeamMembersClient({ currentUserId, canManage }: Props) {
   }
   const members = data?.data ?? [];
   if (members.length === 0) {
-    return <p className="text-sm text-muted-foreground">{t("Nenhum membro ativo.")}</p>;
+    return <p className="text-sm text-muted-foreground">{t("Nenhum membro cadastrado.")}</p>;
   }
 
   return (
@@ -143,7 +145,9 @@ export function TeamMembersClient({ currentUserId, canManage }: Props) {
                   )}
                 </TableCell>
                 <TableCell>
-                  {m.accepted_at ? (
+                  {m.revoked_at ? (
+                    <Badge variant="destructive">{t("Desativado")}</Badge>
+                  ) : m.accepted_at ? (
                     <Badge variant="default">{t("Aceito")}</Badge>
                   ) : (
                     <Badge variant="outline">{t("Pendente")}</Badge>
@@ -164,12 +168,14 @@ export function TeamMembersClient({ currentUserId, canManage }: Props) {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            className="text-destructive focus:text-destructive"
-                            onClick={() => setRevokeDialog(m)}
-                          >
-                            {t("Revogar acesso")}
-                          </DropdownMenuItem>
+                          {m.revoked_at ? (
+                            <DropdownMenuItem onClick={async () => {
+                              try { await activate.mutateAsync(m.user_id); toast.success(t("Membro ativado.")); }
+                              catch { /* showApiError já exibiu a falha */ }
+                            }}>{t("Ativar membro")}</DropdownMenuItem>
+                          ) : (
+                            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setRevokeDialog(m)}>{t("Desativar membro")}</DropdownMenuItem>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     ) : (

@@ -115,7 +115,13 @@ async function validarEmSegundoPlano(
               validation_error: null,
               models_available: r.models,
             }
-          : { validated_at: null, validation_error: r.error },
+          : {
+              validated_at: null,
+              validation_error: r.error,
+              // Um catálogo antigo não representa uma chave que acabou de
+              // falhar; mantê-lo confundiria o diagnóstico da tela.
+              models_available: null,
+            },
       )
       .eq("id", credentialId)
       .eq("organization_id", organizationId);

@@ -14,6 +14,7 @@ interface Props {
   initialData: CredentialRow[];
   canWrite: boolean;
   usageMap: Record<string, number>;
+  referenceMap: Record<string, number>;
 }
 
 // Rótulo e ordem saem da lista única — provedor novo aparece na tela sem que
@@ -24,7 +25,7 @@ const PROVIDER_LABELS: Record<string, string> = Object.fromEntries(
 
 const PROVIDER_ORDER: Provider[] = PROVEDORES.map((p) => p.id);
 
-export function CredentialsList({ initialData, canWrite, usageMap }: Props) {
+export function CredentialsList({ initialData, canWrite, usageMap, referenceMap }: Props) {
   const t = useT();
   const { data } = useCredentialsList({ initialData });
   const [addOpen, setAddOpen] = useState(false);
@@ -89,6 +90,7 @@ export function CredentialsList({ initialData, canWrite, usageMap }: Props) {
                     credential={row}
                     canWrite={canWrite}
                     usageCount={usageMap[row.id] ?? 0}
+                    referenceCount={referenceMap[row.id] ?? 0}
                   />
                 </li>
               ))}
