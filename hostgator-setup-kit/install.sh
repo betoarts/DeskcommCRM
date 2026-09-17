@@ -2058,6 +2058,24 @@ else
   [ -n "$health_body" ] && c_dim "  última resposta: $(printf '%s' "$health_body" | head -c 200 || true)"
 fi
 
+# O catálogo dos provedores diretos vem no baseline, mas a OpenRouter é grande
+# demais para ser congelada nele: seus modelos chegam pelo cron diário. Numa
+# instalação feita depois da rodada das 04:15 UTC, isso deixava o seletor do
+# agente vazio até o dia seguinte, mesmo com uma chave OpenRouter válida.
+#
+# O scheduler já recebe INTERNAL_SECRET no ambiente, portanto o segredo não
+# sai no argv deste processo. Falhar aqui não invalida uma instalação saudável:
+# o cron diário continua sendo a recuperação para uma indisponibilidade externa.
+if [ "${APP_SAUDAVEL:-0}" = 1 ]; then
+  step "Atualizando o catálogo inicial de modelos de IA"
+  if catalogo_body="$(dc exec -T scheduler sh -c 'curl -fsS -m60 -H "Authorization: Bearer $INTERNAL_SECRET" http://app:3000/api/v1/cron/sync-model-catalog' 2>&1)"; then
+    c_grn "✓ catálogo de modelos atualizado"
+  else
+    c_ylw "⚠ não consegui atualizar o catálogo de modelos agora; o agendador tentará novamente às 04:15 UTC."
+    [ -n "$catalogo_body" ] && c_dim "  detalhe: $(printf '%s' "$catalogo_body" | head -c 200 || true)"
+  fi
+fi
+
 # ── 11. Automações (cron do drain de eventos) ───────────────────────────────
 step "Ativando as automações"
 ensure_encryption_key .env
