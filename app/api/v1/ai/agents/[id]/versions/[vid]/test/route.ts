@@ -139,7 +139,10 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
     await admin
       .from("ai_agent_runs")
       .update({
-        status: "error",
+        // `ai_agent_runs.status` aceita `failed`, não `error`. Usar o valor
+        // fora do contrato fazia o UPDATE falhar e deixava todo preview preso
+        // em `running`, embora a API já tivesse respondido 422.
+        status: "failed",
         completed_at: new Date().toISOString(),
         error_code: "preview_failed",
       })
