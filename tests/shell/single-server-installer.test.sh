@@ -26,6 +26,7 @@ check "download oficial tem SHA-256 fixo" grep -q 'SUPABASE_SETUP_SHA256=' "$INS
 check "rede privada liga CRM e Supabase" grep -q 'deskcomm_single_server' "$INSTALLER"
 check "Postgres do app usa DNS privado" grep -q '@supabase-db:5432/postgres' "$INSTALLER"
 check "gateway interno nao depende do DNS publico" grep -q 'SUPABASE_INTERNAL_URL http://127.0.0.1:8000' "$INSTALLER"
+check "validador usa o gateway interno antes do Caddy" grep -q 'SUPABASE_INTERNAL_URL' "$CANONICAL"
 check "administrador recebe senha aleatoria" grep -q 'openssl rand -hex 16' "$INSTALLER"
 check "IA inicia explicitamente desativada" grep -q 'AI_PROVIDER disabled' "$INSTALLER"
 check "nao existe mais pergunta de imagem" bash -c '! grep -q "Imagem Docker do app" "$1"' _ "$CANONICAL"

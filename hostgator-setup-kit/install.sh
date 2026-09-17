@@ -247,10 +247,32 @@ v_supabase_url() {
     *supabase.co*) echo "Cole a URL completa, começando com https:// — ex.: https://abcdefgh.supabase.co"; return 1;;
     *) echo "A URL precisa começar com https://. Na nuvem ela fica em Settings > API > Project URL (termina em .supabase.co); num Supabase próprio, é o endereço do seu servidor."; return 1;;
   esac
+  # No modo single-server a URL pública é atendida pelo Caddy, que só sobe
+  # DEPOIS deste instalador. Sondá-la aqui cria uma dependência circular: o
+  # Supabase local já está pronto, mas a instalação para antes de chegar ao
+  # compose que publica o Caddy. Nesse caso, a prova equivalente e disponível
+  # neste ponto é o Envoy local, publicado apenas em loopback.
+  local health_url="$1"
+  if [ "${SINGLE_SERVER:-0}" = "1" ]; then
+    health_url="${SUPABASE_INTERNAL_URL:-}"
+    case "$health_url" in
+      http://*|https://*) ;;
+      *)
+        echo "O modo single-server exige SUPABASE_INTERNAL_URL com http:// ou https:// para validar o Supabase local."
+        return 1
+        ;;
+    esac
+  fi
+  health_url="${health_url%/}/auth/v1/health"
+
   local code
-  code="$(curl -s -o /dev/null -w '%{http_code}' -m 15 "$1/auth/v1/health" 2>/dev/null)" || code=000
+  code="$(curl -s -o /dev/null -w '%{http_code}' -m 15 "$health_url" 2>/dev/null)" || code=000
   if [ "$code" = "000" ]; then
-    echo "Não consegui alcançar $1 — confira se o projeto existe, está ativo (projeto pausado não responde) e se o VPS tem internet."
+    if [ "${SINGLE_SERVER:-0}" = "1" ]; then
+      echo "Não consegui alcançar o Supabase local em ${SUPABASE_INTERNAL_URL} — confira se a etapa 'Subindo o Supabase local' concluiu."
+    else
+      echo "Não consegui alcançar $1 — confira se o projeto existe, está ativo (projeto pausado não responde) e se o VPS tem internet."
+    fi
     return 1
   fi
   return 0

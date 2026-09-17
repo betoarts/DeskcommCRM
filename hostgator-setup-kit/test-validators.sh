@@ -141,6 +141,27 @@ sburl_ok "rejeita http:// (sem TLS)"               reject "http://db-crm.exemplo
 sburl_ok "a recusa ensina o caso da NUVEM"         reject "meu-supabase" "supabase.co"
 sburl_ok "a recusa ensina o caso do Supabase PRÓPRIO" reject "meu-supabase" "servidor"
 
+# O Caddy do modo single-server ainda não foi iniciado quando o instalador
+# canônico valida o .env. A URL pública não pode ser o alvo desta prova; o
+# Envoy local já iniciado é. Se este teste voltar a chamar o domínio público,
+# o dublê devolve 000 e denuncia a regressão.
+echo "URL do Supabase no modo single-server"
+out="$(bash -c '
+    INSTALL_SH_LIB=1 . ./install.sh
+    SINGLE_SERVER=1
+    SUPABASE_INTERNAL_URL=http://127.0.0.1:8000
+    curl() {
+      [ "${!#}" = "http://127.0.0.1:8000/auth/v1/health" ] || { printf 000; return 6; }
+      printf 200
+    }
+    v_supabase_url https://crm.exemplo.com.br
+  ' 2>&1)"; rc=$?
+if [ "$rc" -eq 0 ]; then
+  printf '  ✓ single-server valida o Envoy local antes do Caddy\n'
+else
+  printf '  ✗ single-server deveria validar o Envoy local (disse: %s)\n' "$(printf '%s' "$out" | head -1)"; fail=1
+fi
+
 echo "chaves do Supabase (formato/papel/projeto)"
 ok "rejeita service_role no campo anon" reject v_anon    "$(mkjwt service_role abcdefghijklmnop)" "preciso da 'anon'"
 ok "rejeita anon no campo service_role" reject v_service "$(mkjwt anon abcdefghijklmnop)"         "preciso da 'service_role'"
