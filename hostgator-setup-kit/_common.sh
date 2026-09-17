@@ -16,7 +16,9 @@ COMPOSE_TRAEFIK="docker-compose.traefik.yml"
 # Todo `docker compose` do kit passa por aqui: com proxy externo, um comando sem
 # o override subiria o Caddy e ele iria bater de frente com o Traefik.
 dc() {
-  if [ "${REVERSE_PROXY:-caddy}" = "traefik" ]; then
+  if [ "${SINGLE_SERVER:-0}" = "1" ]; then
+    docker compose -f "$COMPOSE" -f docker-compose.single-server.yml "$@"
+  elif [ "${REVERSE_PROXY:-caddy}" = "traefik" ]; then
     docker compose -f "$COMPOSE" -f "$COMPOSE_TRAEFIK" "$@"
   else
     docker compose -f "$COMPOSE" "$@"
@@ -27,7 +29,9 @@ dc() {
 # dono. Se a mensagem omitisse o override numa instalação com proxy externo, o
 # próprio dono derrubaria o site seguindo a instrução do kit.
 dc_files() {
-  if [ "${REVERSE_PROXY:-caddy}" = "traefik" ]; then
+  if [ "${SINGLE_SERVER:-0}" = "1" ]; then
+    printf -- '-f %s -f %s' "$COMPOSE" docker-compose.single-server.yml
+  elif [ "${REVERSE_PROXY:-caddy}" = "traefik" ]; then
     printf -- '-f %s -f %s' "$COMPOSE" "$COMPOSE_TRAEFIK"
   else
     printf -- '-f %s' "$COMPOSE"
@@ -420,7 +424,13 @@ url_do_schema() {
 # psql efêmero via container (não exige psql no host). Usa a conexão de schema:
 # os chamadores mexem em `auth.mfa_factors` e `private.app_secrets`, fora do
 # alcance de uma role de app com grants só em `public`.
-psql_run() { docker run --rm -i postgres:17-alpine psql "$(url_do_schema)" -v ON_ERROR_STOP=1 "$@"; }
+pg_container() {
+  local -a rede=()
+  [ -n "${PSQL_DOCKER_NETWORK:-}" ] && rede=(--network "$PSQL_DOCKER_NETWORK")
+  docker run --rm "${rede[@]}" "$@"
+}
+
+psql_run() { pg_container -i postgres:17-alpine psql "$(url_do_schema)" -v ON_ERROR_STOP=1 "$@"; }
 
 # ── As três imagens que NÓS publicamos ───────────────────────────────────────
 # O namespace é constante e literal de propósito: ele está gravado no .env de
@@ -433,7 +443,7 @@ psql_run() { docker run --rm -i postgres:17-alpine psql "$(url_do_schema)" -v ON
 # `docker-compose.prod.yml`, `.env.hostgator.example` e a matriz de
 # `publish-image.yml` digam o mesmo. Se você é um fork, é lá que está a lista do
 # que trocar junto.
-IMG_NS="ghcr.io/melgarafael"
+IMG_NS="ghcr.io/betoarts"
 IMG_APP="${IMG_NS}/deskcommcrm"
 IMG_WORKER="${IMG_NS}/deskcomm-worker"
 IMG_SCHEDULER="${IMG_NS}/deskcomm-scheduler"
@@ -450,7 +460,7 @@ IMG_SCHEDULER="${IMG_NS}/deskcomm-scheduler"
 # alguém porque não deu para resolver um número de versão seria trocar um
 # problema de previsibilidade por um de disponibilidade.
 ultima_versao_publicada() {
-  local url="${1:-https://github.com/melgarafael/DeskcommCRM.git}" ref
+  local url="${1:-https://github.com/betoarts/DeskcommCRM.git}" ref
   command -v git >/dev/null 2>&1 || return 0
   # `grep -v -- -` descarta PRERELEASE (v1.11.0-rc1, v1.1.1-jmpo.1 — esta última
   # existe de verdade neste repo). O `--sort=-v:refname` do git põe o prerelease

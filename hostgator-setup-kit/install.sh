@@ -15,7 +15,7 @@ set -euo pipefail
 # de qualquer 'cd' (step 2 pode entrar num repo clonado à parte).
 KIT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 
-REPO_URL="${REPO_URL:-https://github.com/melgarafael/DeskcommCRM.git}"
+REPO_URL="${REPO_URL:-https://github.com/betoarts/DeskcommCRM.git}"
 # Uma constante, dois usos (o fim feliz e o fim travado) — e o comecar.sh tem a
 # gêmea. Link repetido à mão vira link divergente na primeira troca.
 COMUNIDADE_URL="https://lp-comunidade.automatiklabs.com.br"
@@ -29,18 +29,31 @@ NONINTERACTIVE=0
 # usar o _common.sh). As duas funções abaixo são gêmeas das de lá — se mexer
 # numa, mexa na outra.
 dc() {
-  if [ "${REVERSE_PROXY:-caddy}" = "traefik" ]; then
+  if [ "${SINGLE_SERVER:-0}" = "1" ]; then
+    docker compose -f "$COMPOSE" -f docker-compose.single-server.yml "$@"
+  elif [ "${REVERSE_PROXY:-caddy}" = "traefik" ]; then
     docker compose -f "$COMPOSE" -f "$COMPOSE_TRAEFIK" "$@"
   else
     docker compose -f "$COMPOSE" "$@"
   fi
 }
 dc_files() {
-  if [ "${REVERSE_PROXY:-caddy}" = "traefik" ]; then
+  if [ "${SINGLE_SERVER:-0}" = "1" ]; then
+    printf -- '-f %s -f %s' "$COMPOSE" docker-compose.single-server.yml
+  elif [ "${REVERSE_PROXY:-caddy}" = "traefik" ]; then
     printf -- '-f %s -f %s' "$COMPOSE" "$COMPOSE_TRAEFIK"
   else
     printf -- '-f %s' "$COMPOSE"
   fi
+}
+
+# O instalador tambem valida e aplica o schema antes de carregar _common.sh.
+# Mantenha esta gemea da funcao de _common.sh: no modo single-server o
+# Postgres so e alcancavel pela bridge privada, nunca por uma porta publica.
+pg_container() {
+  local -a rede=()
+  [ -n "${PSQL_DOCKER_NETWORK:-}" ] && rede=(--network "$PSQL_DOCKER_NETWORK")
+  docker run --rm "${rede[@]}" "$@"
 }
 
 # ── Aparência ───────────────────────────────────────────────────────────────
@@ -322,7 +335,7 @@ v_db_url() {
       fi;;
   esac
   local out
-  if out="$(docker run --rm postgres:17-alpine psql "$1" -tAc 'select 1' 2>&1)"; then
+  if out="$(pg_container postgres:17-alpine psql "$1" -tAc 'select 1' 2>&1)"; then
     return 0
   fi
   echo "Não consegui conectar no banco. O Postgres respondeu:"
@@ -1162,6 +1175,7 @@ escolher_provedor
 # O campo da chave do provedor ESCOLHIDO — e só dele. Pedir as três faria a
 # pessoa achar que precisa das três.
 case "$AI_PROVIDER" in
+  disabled)   CAMPO_IA="";;
   openrouter) CAMPO_IA="OPENROUTER_API_KEY|Chave da OpenRouter — a IA que atende (openrouter.ai/keys)||v_openrouter|secret|";;
   openai)     CAMPO_IA="OPENAI_API_KEY|Chave da OpenAI — a IA que atende (platform.openai.com/api-keys)||v_openai|secret|";;
   *)          CAMPO_IA="ANTHROPIC_API_KEY|Chave da Anthropic — a IA que atende (console.anthropic.com)||v_anthropic|secret|";;
@@ -1173,7 +1187,7 @@ esac
 # escolhe OpenRouter instala achando que está completo e descobre semanas depois
 # que o agente nunca ouviu um áudio — que é exatamente o defeito já visto em
 # produção, com a chave certa no .env e indo para o endpoint errado.
-if [ "$AI_PROVIDER" = "openai" ]; then
+if [ "$AI_PROVIDER" = "openai" ] || [ "$AI_PROVIDER" = "disabled" ]; then
   CAMPO_OPENAI_EXTRA=""
 else
   CAMPO_OPENAI_EXTRA="OPENAI_API_KEY|Chave da OpenAI — só para ouvir áudios e usar a base de conhecimento (Enter pula: dá para cadastrar depois pela tela, em IA › Credenciais)||v_openai|secret|opcional"
@@ -1215,7 +1229,7 @@ elif [ -n "$VERSAO_ALVO" ]; then
   c_ylw "⚠ As imagens do worker e do agendador ainda não estão publicadas."
   c_ylw "  Elas serão construídas neste servidor — leva alguns minutos a mais."
   c_ylw "  Rode 'bash hostgator-setup-kit/update.sh' quando a próxima versão sair."
-else
+elif trio_publicado "latest"; then
   # Falha ABERTA: sem rede ou sem tag no remoto, segue como antes. Travar a
   # instalação por não resolver um número seria trocar previsibilidade por
   # disponibilidade — mas o aviso sai, porque o dono precisa saber que ficou
@@ -1223,13 +1237,20 @@ else
   VERSAO_ALVO="latest"
   c_ylw "⚠ Não consegui descobrir a última versão publicada (rede?)."
   c_ylw "  Instalando pelo canal 'latest'. Depois rode: bash hostgator-setup-kit/update.sh"
+else
+  # Fork sem tags e sem pacotes publicados: o compose ainda tem `build:` como
+  # escape, mas nunca deixe essa mudança de proveniencia acontecer em silencio.
+  VERSAO_ALVO="latest"
+  c_ylw "⚠ Não encontrei uma versão completa publicada nem imagens acessíveis no GHCR."
+  c_ylw "  Elas serão construídas neste servidor — leva alguns minutos a mais."
+  c_ylw "  Depois de publicar as imagens, rode: bash hostgator-setup-kit/update.sh"
 fi
 IMAGEM_APP_DEFAULT="${IMG_APP}:${VERSAO_ALVO}"
+APP_IMAGE="${APP_IMAGE:-$IMAGEM_APP_DEFAULT}"
 
 FIELDS=(
   "DOMAIN|Domínio do CRM (ex: crm.suaempresa.com.br)||v_domain||"
   "ACME_EMAIL|Seu e-mail (avisos de SSL)||v_email||"
-  "APP_IMAGE|Imagem Docker do app|${IMAGEM_APP_DEFAULT}|||"
   "NEXT_PUBLIC_SUPABASE_URL|Supabase Project URL (Settings > API)||v_supabase_url||"
   "NEXT_PUBLIC_SUPABASE_ANON_KEY|Supabase anon key (Settings > API)||v_anon||"
   "SUPABASE_SERVICE_ROLE_KEY|Supabase service_role key (Settings > API)||v_service|secret|"
@@ -1244,7 +1265,7 @@ FIELDS=(
   # uma máquina que não existe fora do laptop de quem desenvolve. Era o estado
   # de TODA instalação feita pelo caminho documentado. (issue #431/#426)
   "SUPABASE_ACCESS_TOKEN|Token de acesso do Supabase — configura os links de e-mail (supabase.com/dashboard/account/tokens). NÃO fica salvo. Enter pula|||secret|opcional"
-  "$CAMPO_IA"
+  ${CAMPO_IA:+"$CAMPO_IA"}
   ${CAMPO_OPENAI_EXTRA:+"$CAMPO_OPENAI_EXTRA"}
   "OWNER_EMAIL|E-mail do primeiro admin (dono)||v_email||"
   "OWNER_PASSWORD|Senha do primeiro admin (mínimo 8 caracteres)||v_password|secret|"
@@ -1568,6 +1589,10 @@ esac
   envq NEXT_PUBLIC_SUPABASE_ANON_KEY "$NEXT_PUBLIC_SUPABASE_ANON_KEY"
   envq SUPABASE_SERVICE_ROLE_KEY "$SUPABASE_SERVICE_ROLE_KEY"
   envq SUPABASE_DB_URL "$SUPABASE_DB_URL"
+  envq SUPABASE_INTERNAL_URL "${SUPABASE_INTERNAL_URL:-}"
+  envq PSQL_DOCKER_NETWORK "${PSQL_DOCKER_NETWORK:-}"
+  envq SINGLE_SERVER "${SINGLE_SERVER:-0}"
+  envq SINGLE_SERVER_NETWORK "${SINGLE_SERVER_NETWORK:-deskcomm_single_server}"
   envq NEXT_PUBLIC_APP_URL "$NEXT_PUBLIC_APP_URL"
   envq NEXT_PUBLIC_ADMIN_URL "$NEXT_PUBLIC_ADMIN_URL"
   printf '# Marca da instalação (white-label). Preencha APP_LOGO_URL com a URL de uma\n'
@@ -1760,7 +1785,7 @@ if [ -f supabase/baseline.sql ]; then
   # (pg_trgm) mas NÃO cria as extensões. Supabase não as habilita no schema public por
   # padrão — criamos aqui, senão o schema quebra no meio (ex.: "type public.vector does
   # not exist"). Idempotente (if not exists).
-  docker run --rm postgres:17-alpine psql "$(url_do_schema)" -v ON_ERROR_STOP=1 -c \
+  pg_container postgres:17-alpine psql "$(url_do_schema)" -v ON_ERROR_STOP=1 -c \
     "create extension if not exists vector with schema public; create extension if not exists citext with schema public; create extension if not exists pg_trgm with schema public;" \
     >/dev/null 2>&1 \
     && c_grn "✓ extensões (vector, citext, pg_trgm) habilitadas no public" \
@@ -1777,12 +1802,12 @@ if [ -f supabase/baseline.sql ]; then
   # dentro da substituição e, com `set -e` + `pipefail`, derruba o instalador sem
   # imprimir nada (o 2>/dev/null já tinha engolido a causa). Preferimos seguir e
   # deixar o erro aparecer no ponto em que dá para explicá-lo.
-  has_schema="$(docker run --rm postgres:17-alpine psql "$(url_do_schema)" -tAc \
+  has_schema="$(pg_container postgres:17-alpine psql "$(url_do_schema)" -tAc \
     "select 1 from information_schema.tables where table_schema='public' and table_name='organizations' limit 1" 2>/dev/null | tr -d '[:space:]' || true)"
 
   if [ "$has_schema" = "1" ]; then
     c_ylw "• schema já existe — re-aplicando em modo update (erros 'já existe' são esperados e ficam no log)"
-    raw="$(docker run --rm -i -v "$PROJECT_DIR/supabase/baseline.sql:/baseline.sql:ro" \
+    raw="$(pg_container -i -v "$PROJECT_DIR/supabase/baseline.sql:/baseline.sql:ro" \
           postgres:17-alpine psql "$(url_do_schema)" -q -f /baseline.sql 2>&1 || true)"
     printf '%s\n' "$raw" > "$SCHEMA_LOG"
     benign='already exists|multiple primary keys|multiple default values|is already a member|already a partition'
@@ -1794,7 +1819,7 @@ if [ -f supabase/baseline.sql ]; then
       c_grn "✓ schema re-aplicado (apêndice de migrations incluído)"
     fi
   else
-    if docker run --rm -i -v "$PROJECT_DIR/supabase/baseline.sql:/baseline.sql:ro" \
+    if pg_container -i -v "$PROJECT_DIR/supabase/baseline.sql:/baseline.sql:ro" \
         postgres:17-alpine psql "$(url_do_schema)" -v ON_ERROR_STOP=1 -f /baseline.sql \
         > "$SCHEMA_LOG" 2>&1; then
       c_grn "✓ schema aplicado (log: $SCHEMA_LOG)"
@@ -1808,7 +1833,7 @@ if [ -f supabase/baseline.sql ]; then
   fi
 
   # Verificação real, não wishful thinking: o app precisa das tabelas core.
-  n_tables="$(docker run --rm postgres:17-alpine psql "$(url_do_schema)" -tAc \
+  n_tables="$(pg_container postgres:17-alpine psql "$(url_do_schema)" -tAc \
     "select count(*) from information_schema.tables where table_schema='public'" 2>/dev/null | tr -d '[:space:]')"
   if [ "${n_tables:-0}" -ge 30 ]; then
     c_grn "✓ verificação: ${n_tables} tabelas no schema public"
@@ -1876,7 +1901,7 @@ PENDENCIA_ARQUIVO="$PENDENCIA_EMAIL" \
 step "Criando o primeiro admin (${OWNER_EMAIL})"
 # 1) Cria o usuário no Supabase Auth. Se já existe, a API responde 422 — ignoramos
 #    (|| true): a re-execução é idempotente, o passo seguinte encontra o usuário.
-curl -fsS -X POST "${NEXT_PUBLIC_SUPABASE_URL}/auth/v1/admin/users" \
+curl -fsS -X POST "${SUPABASE_INTERNAL_URL:-${NEXT_PUBLIC_SUPABASE_URL}}/auth/v1/admin/users" \
   -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Content-Type: application/json" \
@@ -1886,7 +1911,7 @@ curl -fsS -X POST "${NEXT_PUBLIC_SUPABASE_URL}/auth/v1/admin/users" \
 # 2) Resolve o id direto do auth.users e cria org + membership + platform_admin.
 #    Resolver o uid DENTRO do SQL evita parsing frágil de JSON e funciona tanto para
 #    usuário recém-criado quanto para um que já existia (re-execução).
-docker run --rm -i postgres:17-alpine psql "$(url_do_schema)" -v ON_ERROR_STOP=1 <<SQL \
+pg_container -i postgres:17-alpine psql "$(url_do_schema)" -v ON_ERROR_STOP=1 <<SQL \
   && c_grn "✓ dono criado e promovido a super-admin" \
   || die "Não consegui promover o admin. Confira a service_role key, a URL e a connection string do Supabase.
      Este passo lê auth.users e escreve em public: num Supabase próprio ele precisa do dono do
@@ -1926,7 +1951,7 @@ begin
   -- não usar. Só o provider: o modelo padrão fica com o que o trigger semeou
   -- até alguém escolher em Agente de IA -> Provedores, porque adivinhar um id
   -- de modelo de outro provedor aqui seria inventar um valor não verificado.
-  if '${AI_PROVIDER}' not in ('', 'anthropic') then
+  if '${AI_PROVIDER}' in ('openrouter', 'openai') then
     update public.organizations
        set settings = jsonb_set(
              coalesce(settings, '{}'::jsonb), '{llm,provider}',

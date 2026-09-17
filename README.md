@@ -11,7 +11,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript)](https://www.typescriptlang.org)
 [![Supabase](https://img.shields.io/badge/Supabase-Postgres%2BAuth%2BStorage-3ecf8e?logo=supabase)](https://supabase.com)
 [![Self-hosted](https://img.shields.io/badge/self--hosted-1%20comando-orange)](hostgator-setup-kit/)
-[![CI](https://github.com/melgarafael/DeskcommCRM/actions/workflows/ci.yml/badge.svg)](https://github.com/melgarafael/DeskcommCRM/actions/workflows/ci.yml)
+[![CI](https://github.com/betoarts/DeskcommCRM/actions/workflows/ci.yml/badge.svg)](https://github.com/betoarts/DeskcommCRM/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 [**⚡ Instalar**](#-instalar-na-sua-vps-o-caminho-principal) · [**🔄 Atualizar**](#-atualizar) · [**🧭 Visão**](VISION.md) · [**🏗️ Arquitetura**](ARCHITECTURE.md) · [**🤝 Contribuir**](CONTRIBUTING.md) · [**🗺️ Roadmap**](#%EF%B8%8F-roadmap)
@@ -36,7 +36,7 @@
 > comando certo pro seu caso:
 >
 > ```bash
-> curl -fsSL https://raw.githubusercontent.com/melgarafael/DeskcommCRM/main/hostgator-setup-kit/comecar.sh | bash
+> curl -fsSL https://raw.githubusercontent.com/betoarts/DeskcommCRM/main/hostgator-setup-kit/comecar.sh | bash
 > ```
 >
 > *(prefere ler antes de executar? clone o repo e rode `bash hostgator-setup-kit/comecar.sh` —
@@ -138,9 +138,17 @@ bash ubuntu-production-installer.sh
 ```
 
 É isso. **Você não instala Node, nem pnpm, nem compila nada** — a imagem do app já vem pronta.
-O instalador prepara o Ubuntu, pergunta o domínio e as credenciais necessárias, gera o `.env`
-e os segredos, configura a comunicação interna dos containers e escolhe HTTPS via Caddy ou
-o Traefik que já existir na hospedagem. Se faltar Docker, ele pergunta e instala sozinho.
+O instalador pergunta somente o domínio. Ele prepara o Ubuntu, instala o Supabase self-hosted,
+gera o `.env`, todos os segredos e o administrador inicial, configura a comunicação privada
+dos containers e publica app e APIs necessárias com HTTPS pelo Caddy. A IA começa desativada
+e pode ser configurada depois pela interface. Se faltar Docker, ele instala automaticamente.
+
+Este modo exige pelo menos **4 GB de RAM**; para CRM + Supabase na mesma VPS, **8 GB ou mais**
+é o recomendado.
+
+> O instalador confere antes de alterar a VPS se as três imagens do fork (`deskcommcrm`,
+> `deskcomm-worker` e `deskcomm-scheduler`) estão públicas no GHCR. Se ainda não estiverem,
+> ele para com segurança e mostra o link do workflow **Publicar imagem Docker (GHCR)**.
 
 Em outra distribuição Linux, ou se você já preparou o servidor manualmente, a entrada canônica
 continua disponível em `bash hostgator-setup-kit/install.sh`.
@@ -149,24 +157,20 @@ continua disponível em `bash hostgator-setup-kit/install.sh`.
 
 | Item | Onde conseguir |
 |---|---|
-| **VPS com Docker** | [HostGator](https://www.hostgator.com.br/52708-141-3-52.html) (parceria) — ou qualquer VPS com Docker. 4 GB de RAM recomendados |
+| **VPS Ubuntu amd64** | No mínimo 4 GB de RAM; 8 GB ou mais recomendados para CRM + Supabase |
 | **Domínio** | Um registro **A** apontando pro IP da VPS (ex.: `crm.suaempresa.com.br`) |
-| **Banco** | Conta grátis no [supabase.com](https://supabase.com) — 3 chaves + connection string do **Session pooler** |
-| **IA** | Uma chave de **OpenRouter**, **Anthropic** ou **OpenAI** — o instalador pergunta qual você quer |
 | **WhatsApp** | Seu número, conectado por QR code no onboarding (ou o canal oficial da Meta) |
 
-> 💡 **O Supabase pode ser criado pelo próprio instalador.** Exporte um
-> `SUPABASE_ACCESS_TOKEN` antes de rodar e ele cria o projeto, espera o banco ficar saudável,
-> busca as 4 credenciais e descobre o host do pooler testando conexão real — sem copiar e colar.
+Não é necessária uma conta externa do Supabase. Postgres, Auth, REST, Realtime e Storage são
+instalados na própria VPS. Também não é necessário informar uma chave de IA durante a instalação.
 
 ### O que o instalador faz por você
 
-Ele **pergunta só o que é seu** (domínio, chaves, senha do admin), **valida cada resposta antes
-de seguir** — chave errada ele recusa na hora, não três passos depois — e cuida do resto:
+Ele pergunta somente o domínio, valida a resposta e cuida do restante:
 
 1. Gera todos os segredos técnicos sozinho (você não inventa senha nenhuma).
 2. Cria as extensões do Postgres e aplica o schema completo (`supabase/baseline.sql`).
-3. Cria o primeiro admin com o e-mail e a senha que você escolheu.
+3. Cria o primeiro admin com e-mail derivado do domínio e senha aleatória forte.
 4. Sobe a stack inteira com **HTTPS automático** e confere a saúde no fim.
 5. Instala o **cron das automações** (sem ele, as regras QUANDO/SE/ENTÃO ficam paradas na fila)
    e o **agente de atualização**, que é o que faz o botão "Atualizar agora" existir na tela.
@@ -174,16 +178,14 @@ de seguir** — chave errada ele recusa na hora, não três passos depois — e 
 **Rodar de novo não quebra nada** — o `install.sh` é idempotente: não duplica cron, não recria
 usuário, retoma de onde parou.
 
-> **Modo não-interativo:** copie `.env.hostgator.example` para `.env`, preencha e rode
-> `bash hostgator-setup-kit/install.sh --yes`.
+> **Modo não-interativo:** rode
+> `bash ubuntu-production-installer.sh --domain crm.suaempresa.com.br`.
 
 ### Outra hospedagem? (Hostinger, Coolify, Dokploy, CapRover…)
 
-Funciona. Se a sua VPS já vem com um **proxy reverso próprio** ocupando as portas 80/443, o
-instalador **detecta isso sozinho** e publica o CRM através dele, em vez de tentar subir um
-Caddy que não caberia. Num caso específico — proxy em `--network host`, como faz a Hostinger —
-ele **pergunta em vez de adivinhar**, porque publicar atrás do proxy errado instala "com
-sucesso" um site mudo. Detalhes em [`hostgator-setup-kit/README.md`](hostgator-setup-kit/README.md#vps-que-já-vem-com-proxy-próprio-hostinger-coolify-dokploy).
+O modo single-server precisa controlar as portas 80/443 com o próprio Caddy. Em uma VPS que já
+usa Traefik, Coolify, Dokploy ou outro proxy nessas portas, utilize o instalador avançado
+`bash hostgator-setup-kit/install.sh`, que aceita uma topologia externa e credenciais próprias.
 
 ### Primeiro acesso
 

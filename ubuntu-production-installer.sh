@@ -7,7 +7,7 @@
 set -Eeuo pipefail
 
 readonly ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly KIT_INSTALLER="$ROOT_DIR/hostgator-setup-kit/install.sh"
+readonly KIT_INSTALLER="$ROOT_DIR/hostgator-setup-kit/install-single-server.sh"
 
 COLOR=0
 if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then COLOR=1; fi
@@ -28,48 +28,38 @@ die()  { paint 31 "✖ $*" >&2; exit 1; }
 
 usage() {
   cat <<'EOF'
-Uso: bash ubuntu-production-installer.sh [--yes]
+Uso: bash ubuntu-production-installer.sh [--domain DOMINIO]
 
 Prepara uma VPS Ubuntu e inicia a instalação de produção do DeskcommCRM.
 
 Modo interativo (recomendado):
   bash ubuntu-production-installer.sh
 
-O instalador pergunta o domínio, e-mail do certificado, Supabase, provedor de
-IA, usuário administrador e opções de marca. Ele gera os segredos e o .env,
-detecta Caddy/Traefik, sobe os serviços Docker e valida DNS, banco e saúde.
+O instalador pergunta somente o domínio. Ele gera todos os segredos, instala o
+Supabase self-hosted, cria o administrador inicial, configura HTTPS, sobe os
+serviços Docker e valida DNS, banco e saúde. A IA inicia desativada.
 
 Modo não interativo:
-  bash ubuntu-production-installer.sh --yes
-
-O modo --yes exige um .env previamente preenchido. Ele não inventa respostas
-para credenciais nem escolhe silenciosamente o proxy de uma VPS ambígua.
+  bash ubuntu-production-installer.sh --domain crm.suaempresa.com.br
 
 Serviços locais em Docker:
-  app, worker, scheduler, WAHA, Redis, adaptador Redis HTTP e Caddy quando a
-  VPS não possui proxy reverso próprio. O Supabase pode ser provisionado pelo
-  instalador ou apontar para uma instalação Supabase própria com HTTPS.
-EOF
-}
+  app, worker, scheduler, WAHA, Redis, adaptador Redis HTTP, Caddy e Supabase
+  self-hosted (Postgres, Auth, REST, Realtime e Storage).
 
-confirmar() {
-  local resposta
-  read -r -p "$1 [S/n] " resposta
-  case "${resposta:-S}" in
-    [Nn]|[Nn][AaÃã][Oo]) return 1 ;;
-    *) return 0 ;;
-  esac
+Requisitos: VPS amd64 com no mínimo 4 GB de RAM (8 GB recomendados) e DNS do
+domínio apontando para ela.
+EOF
 }
 
 main() {
   local -a argumentos_kit=()
-  local noninteractive=0
 
   case "${1:-}" in
     "") ;;
-    --yes)
-      argumentos_kit=(--yes)
-      noninteractive=1
+    --domain)
+      [[ -n "${2:-}" ]] || { usage >&2; return 2; }
+      argumentos_kit=(--domain "$2")
+      [[ $# -eq 2 ]] || { usage >&2; return 2; }
       ;;
     -h|--help)
       usage
@@ -80,7 +70,7 @@ main() {
       return 2
       ;;
   esac
-  [[ $# -le 1 ]] || { usage >&2; return 2; }
+  [[ $# -le 2 ]] || { usage >&2; return 2; }
 
   [[ -r /etc/os-release ]] || die "Não consegui identificar o sistema operacional. Este instalador requer Ubuntu."
   # shellcheck disable=SC1091
@@ -107,15 +97,11 @@ main() {
   if ! "${privilegiado[@]}" apt-get update; then
     warn "Um repositório APT externo falhou; tentarei usar os índices válidos já disponíveis."
   fi
-  "${privilegiado[@]}" apt-get install -y ca-certificates curl git openssl
+  "${privilegiado[@]}" apt-get install -y ca-certificates curl git jq openssl
 
   local docker_instalado_agora=0
   if ! command -v docker >/dev/null 2>&1; then
     warn "Docker ainda não está instalado."
-    if [[ "$noninteractive" == 0 ]] && ! confirmar "Posso instalar o Docker usando o instalador oficial?"; then
-      die "Sem Docker não é possível subir a aplicação."
-    fi
-
     step "Instalando Docker Engine e Docker Compose"
     local instalador_docker
     instalador_docker="$(mktemp)"
@@ -147,11 +133,11 @@ main() {
   fi
 
   step "Iniciando a instalação inteligente de produção"
-  printf '%s\n' "  • o domínio será perguntado e validado;"
-  printf '%s\n' "  • o .env será gerado com permissão 600 e segredos aleatórios;"
-  printf '%s\n' "  • app, worker, scheduler, WAHA e Redis conversarão pela rede Docker interna;"
-  printf '%s\n' "  • Caddy emitirá HTTPS ou o proxy Traefik existente será detectado;"
-  printf '%s\n' "  • a conclusão depende de banco, containers, rota de saúde e domínio responderem."
+  printf '%s\n' "  • somente o domínio será perguntado;"
+  printf '%s\n' "  • Supabase, banco e todos os segredos serão gerados nesta VPS;"
+  printf '%s\n' "  • app, worker, scheduler, WAHA e Redis usarão redes Docker privadas;"
+  printf '%s\n' "  • Caddy emitirá HTTPS e publicará apenas o app e as APIs necessárias;"
+  printf '%s\n' "  • administrador e senha aleatória serão exibidos e salvos com permissão 600."
 
   cd "$ROOT_DIR"
   exec "${executor[@]}" "$KIT_INSTALLER" "${argumentos_kit[@]}"

@@ -1,10 +1,10 @@
 ---
 impacto: capacidade_nova
 secao: adicionado
-titulo: Ubuntu ganha uma entrada guiada para instalação de produção
+titulo: Ubuntu ganha instalacao single-server guiada apenas pelo dominio
 ---
 
-Uma VPS Ubuntu agora pode preparar as dependências e iniciar a instalação
-completa de produção por um script na raiz. A entrevista pergunta o domínio,
-gera o `.env` e os segredos, configura a comunicação interna dos serviços
-Docker, escolhe Caddy ou o Traefik existente e só conclui após as verificações.
+Uma VPS Ubuntu agora pode instalar CRM e Supabase self-hosted na mesma maquina
+respondendo somente o dominio. O fluxo gera segredos e administrador, mantém
+Postgres e Studio privados, publica app e APIs necessárias por HTTPS, inicia a
+IA desativada e só conclui após validar banco, containers e saúde.

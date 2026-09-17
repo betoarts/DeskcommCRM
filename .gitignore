@@ -49,6 +49,9 @@ next-env.d.ts
 supabase/.temp/
 supabase/.branches/
 
+# Runtime do instalador single-server: Supabase self-hosted, credenciais e dados.
+.runtime/
+
 # Epic executor (skill artifacts)
 .epic-executor/
 

@@ -1452,7 +1452,7 @@ chegou_na_deteccao() {
 }
 # As RESPOSTAS do modo interativo, na ordem em que o instalador pergunta: o
 # proxy (o que se testa aqui), depois os campos que o BASE_ENV deixa vazios de
-# propósito (imagem, provedor de IA, marca, suporte e SMTP — todos com Enter),
+# propósito (provedor de IA, marca, suporte e SMTP — todos com Enter),
 # a tela de conferência,
 # a telemetria e o aviso de DNS ('c' = seguir assim mesmo).
 # As respostas que vêm DEPOIS da do proxy reverso, na ordem em que o install.sh
@@ -1471,17 +1471,17 @@ chegou_na_deteccao() {
 #   printf '%s' "${RESTO_DAS_PERGUNTAS%%c*}" | grep -c ''
 # → a quantidade depende do questionário atual do instalador. O último `c`
 #   confirma o aviso de DNS.
-RESTO_DAS_PERGUNTAS="$(for _ in {1..19}; do printf '\n'; done; printf 'c\n')"
+RESTO_DAS_PERGUNTAS="$(for _ in {1..18}; do printf '\n'; done; printf 'c\n')"
 
 # A posição da cor DENTRO da fila acima — SUPABASE_ACCESS_TOKEN + 1 provedor +
-# APP_IMAGE + OPENAI + APP_NAME + APP_LOCALE e ela é a 7ª. Fica numa variável porque a fila com a cor RESPONDIDA
+# OPENAI + APP_NAME + APP_LOCALE e ela é a 6ª. Fica numa variável porque a fila com a cor RESPONDIDA
 # (abaixo) é DERIVADA da de cima em vez de copiada: duas filas posicionais
 # mantidas à mão desincronizam no primeiro campo novo, e aí uma passa e a outra
 # reprova com um nome que não é o dela.
-POSICAO_DA_COR=7
-# O idioma vem logo antes da cor: SUPABASE_ACCESS_TOKEN + 1 provedor + APP_IMAGE
-# + OPENAI + APP_NAME.
-POSICAO_DO_IDIOMA=6
+POSICAO_DA_COR=6
+# O idioma vem logo antes da cor: SUPABASE_ACCESS_TOKEN + 1 provedor + OPENAI
+# + APP_NAME.
+POSICAO_DO_IDIOMA=5
 COR_DE_TESTE='#f2c94c'
 # fila_com <fila> <posição> <valor> → a mesma fila, com uma resposta no lugar de
 # um Enter. `awk` porque a substituição é por NÚMERO DE LINHA: um `sed s///`
