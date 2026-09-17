@@ -1,9 +1,11 @@
 ---
 impacto: capacidade_nova
 secao: adicionado
-titulo: Utilitario para remover todos os recursos de um daemon Docker
+titulo: Desinstalador Docker remove somente a aplicacao atual
 ---
 
-Agora ha um script operacional que, mediante confirmacao explicita, para e remove
-containers, imagens, volumes, redes personalizadas e cache do daemon Docker selecionado.
-Use-o apenas quando a intencao for descartar todos os dados Docker da maquina.
+O desinstalador na raiz agora seleciona containers, volumes e redes pelos labels
+do projeto Docker Compose atual. Outras aplicacoes do mesmo servidor, imagens,
+cache de build, redes externas do proxy, codigo, `.env`, backups e bancos
+Supabase externos sao preservados. A operacao continua exigindo confirmacao
+explicita e oferece `--force` para automacao.
