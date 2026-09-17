@@ -193,6 +193,41 @@ Abra `https://<seu-domínio>` (o cadeado leva ~1 min pra aparecer), entre com o 
 **Google Authenticator** ou **Authy** à mão *se* você quiser ligar a verificação em duas etapas — ela é **opcional** e fica em Configurações › Segurança; o primeiro login **não** a exige. No onboarding,
 escaneie o QR code com o WhatsApp do seu número.
 
+### Diagnóstico: “Testar agente” retorna 422
+
+O teste do agente usa o mesmo runtime da operação normal. Um `422` significa que o
+preview foi rejeitado; a mensagem da interface é intencionalmente genérica para não
+expor credenciais. Consulte o registro da execução e da chamada de modelo diretamente
+no Postgres da instalação:
+
+```bash
+cd /DeskcommCRM/DeskcommCRM/.runtime/supabase
+docker compose exec -T db sh -c '
+PGPASSWORD="$POSTGRES_PASSWORD" psql -U postgres -d postgres -P pager=off -c "
+select created_at, status, error_code, left(error_message, 300) as error_message,
+       is_dry_run
+from public.ai_agent_runs
+where agent_id = '\''AGENT_ID'\''
+order by created_at desc limit 10;
+
+select created_at, provider, model, status, error_code, http_status,
+       left(error_message, 300) as error_message
+from public.llm_calls
+where agent_id = '\''AGENT_ID'\''
+order by created_at desc limit 10;
+"'
+```
+
+Substitua `AGENT_ID` pelo UUID do agente. Não cole chaves de API no terminal nem no
+relatório. Execuções que falham são marcadas como `failed`; se permanecerem como
+`running`, atualize a aplicação para a versão mais recente e recrie o container `app`:
+
+```bash
+cd /DeskcommCRM/DeskcommCRM
+git pull --ff-only origin main
+docker compose -f docker-compose.prod.yml -f docker-compose.single-server.yml up -d --force-recreate app
+```
+
 ### 🤖 Prefere que uma IA instale pra você?
 
 Jogue a pasta `hostgator-setup-kit/` no chat do **Claude Code** rodando dentro da VPS e diga
